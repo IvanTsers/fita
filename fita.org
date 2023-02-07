@@ -1,0 +1,477 @@
+#+begin_export latex
+\section{Introduction}
+The search of genetic markers in whole genome sequences (as
+implemented in \texttt{fur}~\cite{hau21:fur}) requires finding a set
+of closely realted genomes making up a \textit{phylogenetic
+  neighborhood} which may include hundreds of genomes. The Neighbors
+package~\cite{hau23:nei} allows to discover the phylogenetic
+neighborhood taking advantage of automation of NCBI taxonomy
+parsing. The result of the parsing is a set of genomic accessions
+separated into two groups: \textbf{targets} and
+\textbf{neighbors}. However the NCBI taxonomy trees and whole-genome
+phylogenetic trees are not always reflect each other~\cite{hau23:nei},
+so it is recommended to check the results of Neighbors pipeline
+through phylogeny analysis. The latter requires \textit{de novo}
+reconstruction of phylogeny of hundreds of genomes followed by
+inspection of the resulting large phylogenetic tree. Efficient tools
+for large-sample phylogenetic analysis do present ~\cite{kloe19:phy},
+but there are no tools allowing automated separation of targets and
+neighbors. The given document introduces \texttt{fita}, a program to
+deal with the latter task.
+
+\section{Approach}
+We begin with an assumption that target genomes are more similar to
+each other than to any of neighbor genomes. Thus, all targets are
+expected to form a clade on a phylogenetic tree. Now let's consider an
+intentionally small example: we have 8 genome sequences in a
+phylogenetic neighborhood predicted with Neighbors, 3 of them are
+marked as \textbf{targets}, 5 other are \textbf{neighbors}. We plot a
+phylogenetic tree of these sequences (Figure~\ref{fig:cladeExample}).
+
+\begin{figure}[H]
+  \begin{center}
+    \includegraphics{cladeExample}
+    \end{center}
+  \caption{The sample phylogenetic tree reconstructed from an
+    imaginary Neighbors-predicted phylogenetic neighborhood. The
+    terminal nodes (encircled), or leaves, represent genomes. Target
+    leaves are filled with grey.}\label{fig:cladeExample}
+\end{figure}
+
+A clade rooted on the node \textbf{2} is the lowest common ancestor of
+all putative targets (nodes \textbf{10}, \textbf{13}, and
+\textbf{15}). If we consider this a target clade, we have also to
+consider the nodes \textbf{12}, \textbf{7}, \textbf{8}, \textbf{14},
+and \textbf{3} to be targets too. Some targets do can be misclassified
+by Neighbors~\cite{hau23:nei}, but in this case we get almost all
+accessions as misclassified. Thus, instead of finding the common
+ancestor of \textit{all} predicted targets, we want finding a node
+which roots \textit{most} of the predicted targets. It is the node
+\textbf{6}. In this case, we have only one node misclassified
+(\textbf{15}) and this seems to be much more plausible.
+
+We had the target nodes marked, so we could locate the target clade
+visually. This intuitive analysis has to be formalized for working
+with text trees. I suggest the following algorithm:
+
+\begin{enumerate}
+\item start with the root of the input tree;
+\item pick the child nodes of the root;
+\item select the child that roots a subtree containing more target
+  leaves than the other child;
+\item set the selected child to be a new root;
+\item repeat the previous 3 steps until we reject a clade consisting
+  of predicted targets completely;
+\item return the resulting subtree.
+\end{enumerate}
+
+Thus, by subsequent removal of non-target leaves from the tree, we
+will reach the node that is the common ancestor for all targets and
+some of their closest neighbors. The resulting tree will be much
+smaller than the original one, since almost all neighbors will be
+removed from it. Such a tree is easier to analyze.
+
+These steps are implemented in \texttt{fita} (\textbf{fi}nd \textbf{ta}rgets).
+
+\section{Implementation}
+The program \texttt{fita} has the main function logic and has hooks
+for auxillary variables, functions, and imports.
+#+end_export
+
+#+begin_src go <<fita.go>>=
+  package main
+
+  import (
+	  //<<Imports>>
+  )
+
+  //<<Auxillary variables>>
+  //<<Functions>>
+
+  func main() {
+	  //<<Main function>>
+  }
+#+end_src
+
+#+begin_export latex
+In the main function we set the usage, declare and parse the options,
+read the input files, find the root node, perform iterative voting,
+and return the resulting tree with maximized number of target leaves.
+#+end_export
+
+#+begin_src go <<Main function>>=
+  //<<Set usage>>
+  //<<Declare options>>
+  //<<Parse options>>
+  //<<Read input>>
+  //<<Find the root and its children>>
+  //<<Iterative voting>>
+  //<<Write the resulting subtree>>
+#+end_src
+
+#+begin_export latex
+The usage consists of the actual usage message, an explanation of the
+purpose of \texttt{fita}, and an example command.
+#+end_export
+
+#+begin_src go <<Set usage>>=
+  u := "fita [tree file]... [target list file]..."
+  p := "Find the target clade subtree."
+  e := "fita -t tree.nwk -l targets.txt"
+  clio.Usage(u, p, e)
+#+end_src
+
+#+begin_export latex
+We import \texttt{clio}.
+#+end_export
+
+#+begin_src go <<Imports>>=
+  "github.com/evolbioinf/clio"
+#+end_src
+
+#+begin_export latex
+The user can set the name of the input files (\texttt{-t} for the tree
+and \texttt{-l} for the list targets), and set the name of the output
+file (\texttt{-o}).
+#+end_export
+
+#+begin_src go <<Declare options>>=
+  var optT = flag.String("t", "", "input tree file")
+  var optL = flag.String("l", "", "list of targets")
+  var optO = flag.String("o", "", "name of the output file")
+#+end_src
+
+#+begin_export latex
+  We import \texttt{flag}.
+#+end_export
+
+#+begin_src go <<Imports>>=
+  "flag"
+#+end_src
+
+#+begin_export latex
+We parse the options and respond to a request for the version, as this
+would terminate the program
+#+end_export
+
+#+begin_src go <<Parse options>>=
+  flag.Parse()
+#+end_src
+
+#+begin_export latex
+We read a \texttt{Newick} tree from a file using a scanner from the
+\texttt{nwk} package.
+#+end_export
+
+#+begin_src go <<Read input>>=
+  treePath := *optT
+
+  treeFile, err := os.Open(treePath)
+  if err != nil {
+	  fmt.Printf("couldn’t open %q", treePath)
+  }
+  defer treeFile.Close()
+  sc := nwk.NewScanner(treeFile)
+  sc.Scan()
+#+end_src
+
+#+begin_export latex
+We import \texttt{os} and \texttt{nwk}.
+#+end_export
+
+#+begin_src go <<Imports>>=
+  "os"
+  "github.com/evolbioinf/nwk"
+  "fmt"
+#+end_src
+
+#+begin_export latex
+We read the list of target names.
+#+end_export
+
+#+begin_src go <<Read input>>=
+  targetListPath := *optL
+
+  targetListFile, err := os.Open(targetListPath)
+  if err != nil {
+	  fmt.Printf("couldn’t open %q", targetListPath)
+  }
+  defer targetListFile.Close()
+
+  var targetList []string
+  tarsc := bufio.NewScanner(targetListFile)
+  for tarsc.Scan() {
+	  targetList = append(targetList, tarsc.Text())
+  }
+#+end_src
+
+#+begin_export latex
+We import \texttt{bufio}.
+#+end_export
+
+#+begin_src go <<Imports>>=
+  "bufio"
+#+end_src
+
+#+begin_export latex
+We initialize 3 variables:
+\begin{description}
+\item[\texttt{cR}] to track the current root node;
+\item[\texttt{aChild}] for the first child of the current root.
+\item[\texttt{bChild}] for the second child of the current root.
+\end{description}
+The initial values are the root of the input tree and its respective
+children.
+#+end_export
+
+#+begin_src go <<Find the root and its children>>=
+  var cR *nwk.Node = sc.Tree()
+  var aChild *nwk.Node = cR.Child
+  var bChild *nwk.Node = aChild.Sib
+#+end_src
+
+#+begin_export latex
+The essence of the 'voting' is to decide which of the two clades
+(\texttt{aChild} or \texttt{bChild}) has more target leaves (votes)
+--this is the winning clade. After the winning clade is defined, we
+move to its root and repeat the voting. We do this until a losing
+clade (which has less target leaves than the winning one) contains
+only target leaves.  We initialize \texttt{losLeaves} and
+\texttt{losLeaves} to keep the total number of leaves and votes in
+the losing clade. We also declare \texttt{winVotes},
+\texttt{winLeaves}, and \texttt{rounds} (number of voting rounds)
+to be able to print out summary.
+#+end_export
+
+#+begin_src go <<Auxillary variables>>=
+  var losLeaves int = 1
+  var losVotes int = 0
+  var winVotes int = 0
+  var winLeaves []string
+  var round int = 0
+#+end_src
+
+#+begin_export latex
+The voting itself has the following steps:
+\begin{enumerate}
+\item get the labels of leaves of a subtree;
+\item count targets among these leaves;
+\item choose the winning clade
+\end{enumerate}
+
+#+end_export
+
+#+begin_src go <<Iterative voting>>=
+  for losVotes != losLeaves {
+	  //<<Get leaf labels>>
+	  //<<Count votes>>
+	  //<<Choose winner>>
+	  round++
+	  cR = cR.Parent
+  }
+#+end_src
+
+#+begin_export latex
+Tracking the visited nodes is needed for further functions. We declare
+an array to keep IDs of the visited nodes. The array is to be reset
+each time a node-visiting function is called.
+#+end_export
+
+#+begin_src go <<Auxillary variables>>=
+  var visIds []int
+#+end_src
+
+#+begin_export latex
+We declare a function for checking if an integer is present in a
+slice of integers.
+#+end_export
+
+#+begin_src go <<Functions>>=
+  func isInInt(slice []int, value int) bool {
+	  for _, x := range slice {
+		  if x == value {
+			  return true
+		  }
+	  }
+	  return false
+  }
+#+end_src
+
+#+begin_export latex
+The function \texttt{getLeaves(n)} returns a slice of leaf labels of a
+subtree rooted on the node \texttt{n}. We use \texttt{cN} to track the
+current node and \texttt{visIds} to track nodes we've already
+visited. The current node is set to a child (\texttt{cN.Child}) until
+a terminal node (a leaf) is reached (\texttt{cN.Child == nil}), then
+the leaf's Label is appended to the \texttt{leafL} slice. In case
+\texttt{cN.Id} is in \texttt{visIds}, we set \texttt{cN} to
+\texttt{cN.Sib}. The absence of a Sibling (\texttt{cN.Sib == nil})
+means that we have already traversed all child nodes in the given
+subtree, so we set \texttt{cN} to its parent (\texttt{cN.Parent}).
+
+The loop stops when Id of the input node \texttt{n} is appended to
+\texttt{visIds}. After that, \texttt{leafL}| is returned.
+#+end_export
+
+#+begin_src go <<Functions>>=
+  func getLeaves(n *nwk.Node) []string {
+	  visIds = nil
+	  leafL = nil
+	  cN := n //cN is a current node
+	  for !isInInt(visIds, n.Id) {
+		  if isInInt(visIds, cN.Id){
+			  if cN.Sib == nil {
+			  cN = cN.Parent
+			  visIds = append(visIds, cN.Id)
+			  } else {
+				  cN = cN.Sib
+			  }
+		  } else {
+			  if cN.Child == nil {
+				  leafL = append(leafL, cN.Label)
+				  visIds = append(visIds, cN.Id)
+			  } else {
+				  cN = cN.Child
+			  }
+		  }
+	  }
+	  return leafL
+  }
+
+#+end_src
+
+#+begin_export latex
+We declare \texttt{leafL}
+#+end_export
+
+#+begin_src go <<Auxillary variables>>=
+  var leafL []string
+#+end_src
+
+#+begin_export latex
+We apply \texttt{getLeaves()} to the children of the current root to
+get an array of the leaf labels.
+#+end_export
+
+#+begin_src go <<Get leaf labels>>=
+  aLeaves = getLeaves(aChild)
+  bLeaves = getLeaves(bChild)
+#+end_src
+
+#+begin_export latex
+We declare \texttt{aLeaves} and \texttt{bLeaves}.
+#+end_export
+
+#+begin_src go <<Auxillary variables>>=
+var aLeaves, bLeaves []string
+#+end_src
+
+#+begin_export latex
+We declare a function for checking if a string is present in a slice
+of strings.
+#+end_export
+
+#+begin_src go <<Functions>>=
+  func isInString(slice []string, value string) bool {
+	  for _, x := range slice {
+		  if x == value {
+			  return true
+		  }
+	  }
+	  return false
+  }
+#+end_src
+
+#+begin_export latex
+We count votes.
+#+end_export
+
+#+begin_src go <<Count votes>>=
+  aVotes = countVotes(aLeaves, targetList)
+  bVotes = countVotes(bLeaves, targetList)
+#+end_src
+
+#+begin_export latex
+We declare function for votes counting.
+#+end_export
+
+#+begin_src go <<Functions>>=
+  func countVotes(leaves []string, targets []string) int {
+	  votes := 0
+	  for _, leaf := range leaves {
+		  if isInString(targets, leaf){
+			  votes++
+		  }
+	  }
+  return votes
+  }
+#+end_src
+
+#+begin_export latex
+The initial value of \texttt{aVotes} and \texttt{bVotes} is zero.
+#+end_export
+
+#+begin_src go <<Auxillary variables>>=
+  var aVotes, bVotes int = 0, 0
+#+end_src
+
+#+begin_export latex
+We choose the winning clade.
+#+end_export
+
+#+begin_src go <<Choose winner>>=
+  if aVotes > bVotes {
+	  cR = aChild
+	  losVotes = bVotes
+	  losLeaves = len(bLeaves)
+	  winVotes = aVotes
+	  winLeaves = aLeaves
+	  aChild = cR.Child
+	  bChild = aChild.Sib
+  } else {
+	  cR = bChild
+	  losVotes = aVotes
+	  losLeaves = len(aLeaves)
+	  winVotes = bVotes
+	  winLeaves = bLeaves
+	  aChild = cR.Child
+	  bChild = aChild.Sib
+  }
+#+end_src
+
+#+begin_export latex
+When the iterative voting is over, we write the resulting tree as a
+string to a file. We remove the first character which has to be comma.
+#+end_export
+
+#+begin_src go <<Write the resulting subtree>>=
+  oFile, err := os.Create(*optO)
+	  if err != nil {
+		  fmt.Println(err)
+	  } else {
+		  oFile.WriteString(cR.String()[1:])
+	  }
+	  oFile.Close()
+
+  fmt.Printf(
+	  "After %d rounds of voting,",
+	  round)
+  fmt.Printf(
+	  "\n a subtree rooted on the node '%s' is found.",
+	  cR.Label)
+  fmt.Printf(
+	  "\n The subtree has %d leaves",
+	  len(winLeaves))
+  fmt.Printf(
+	  "\n including %d of %d targets.\n",
+	   winVotes, len(targetList))
+#+end_src
+
+#+begin_export latex
+TODO:
+\begin{enumerate}
+\item display an error message if the output tree is the same as the
+  input one. Possible reason: names in targets.txt are different from the
+  actual leaf names.
+\end{enumerate}
+#+end_export
