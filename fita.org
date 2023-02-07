@@ -8,7 +8,7 @@ package~\cite{hau23:nei} allows to discover the phylogenetic
 neighborhood taking advantage of automation of NCBI taxonomy
 parsing. The result of the parsing is a set of genomic accessions
 separated into two groups: \textbf{targets} and
-\textbf{neighbors}. However the NCBI taxonomy trees and whole-genome
+\textbf{neighbors}. However, the NCBI taxonomy trees and whole-genome
 phylogenetic trees are not always reflect each other~\cite{hau23:nei},
 so it is recommended to check the results of Neighbors pipeline
 through phylogeny analysis. The latter requires \textit{de novo}
