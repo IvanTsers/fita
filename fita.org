@@ -5,6 +5,7 @@ implemented in \texttt{fur}~\cite{hau21:fur}) requires finding a set
 of closely realted genomes making up a \textit{phylogenetic
   neighborhood}, which may include hundreds of genomes. The Neighbors
 package~\cite{hau23:nei} allows to discover the phylogenetic
+<<<<<<< HEAD
 neighborhood using automated parsing of NCBI taxonomy. The result of
 the parsing is a set of genomic accessions separated into two groups:
 \textbf{targets} and \textbf{neighbors}. However, the NCBI taxonomy
@@ -13,6 +14,17 @@ other~\cite{hau23:nei}, so it is recommended to check the results of
 Neighbors pipeline through phylogeny analysis. The latter requires
 \textit{de novo} reconstruction of phylogeny of hundreds of genomes
 followed by inspection of large phylogenetic trees. Efficient tools
+=======
+neighborhood taking advantage of automation of NCBI taxonomy
+parsing. The result of the parsing is a set of genomic accessions
+separated into two groups: \textbf{targets} and
+\textbf{neighbors}. However, the NCBI taxonomy trees and whole-genome
+phylogenetic trees are not always reflect each other~\cite{hau23:nei},
+so it is recommended to check the results of Neighbors pipeline
+through phylogeny analysis. The latter requires \textit{de novo}
+reconstruction of phylogeny of hundreds of genomes followed by
+inspection of the resulting large phylogenetic tree. Efficient tools
+>>>>>>> 674d5c0c4d582fbef1ef85b97061399fb9530c0d
 for large-sample phylogenetic analysis do present ~\cite{kloe19:phy},
 but there are no tools allowing automated separation of targets and
 neighbors. The given document introduces \texttt{fita}, a program for
