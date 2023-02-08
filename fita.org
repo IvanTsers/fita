@@ -3,62 +3,63 @@
 The search of genetic markers in whole genome sequences (as
 implemented in \texttt{fur}~\cite{hau21:fur}) requires finding a set
 of closely realted genomes making up a \textit{phylogenetic
-  neighborhood} which may include hundreds of genomes. The Neighbors
+  neighborhood}, which may include hundreds of genomes. The Neighbors
 package~\cite{hau23:nei} allows to discover the phylogenetic
-neighborhood taking advantage of automation of NCBI taxonomy
-parsing. The result of the parsing is a set of genomic accessions
-separated into two groups: \textbf{targets} and
-\textbf{neighbors}. However the NCBI taxonomy trees and whole-genome
-phylogenetic trees are not always reflect each other~\cite{hau23:nei},
-so it is recommended to check the results of Neighbors pipeline
-through phylogeny analysis. The latter requires \textit{de novo}
-reconstruction of phylogeny of hundreds of genomes followed by
-inspection of the resulting large phylogenetic tree. Efficient tools
+neighborhood using automated parsing of NCBI taxonomy. The result of
+the parsing is a set of genomic accessions separated into two groups:
+\textbf{targets} and \textbf{neighbors}. However, the NCBI taxonomy
+trees and whole-genome phylogenetic trees are not always reflect each
+other~\cite{hau23:nei}, so it is recommended to check the results of
+Neighbors pipeline through phylogeny analysis. The latter requires
+\textit{de novo} reconstruction of phylogeny of hundreds of genomes
+followed by inspection of large phylogenetic trees. Efficient tools
 for large-sample phylogenetic analysis do present ~\cite{kloe19:phy},
 but there are no tools allowing automated separation of targets and
-neighbors. The given document introduces \texttt{fita}, a program to
-deal with the latter task.
+neighbors. The given document introduces \texttt{fita}, a program for
+dealing with the latter task.
 
 \section{Approach}
-We begin with an assumption that target genomes are more similar to
-each other than to any of neighbor genomes. Thus, all targets are
-expected to form a clade on a phylogenetic tree. Now let's consider an
-intentionally small example: we have 8 genome sequences in a
-phylogenetic neighborhood predicted with Neighbors, 3 of them are
+We begin with an assumption that the target genomes are more similar
+to each other than to any of the neighbor genomes. Thus, all the
+targets are expected to form a clade on a phylogenetic tree. Now let's
+consider an intentionally small example: we have 8 genome sequences in
+a phylogenetic neighborhood predicted with Neighbors, 3 of them are
 marked as \textbf{targets}, 5 other are \textbf{neighbors}. We plot a
-phylogenetic tree of these sequences (Figure~\ref{fig:cladeExample}).
+phylogenetic tree for these sequences (Figure~\ref{fig:cladeExample}).
 
 \begin{figure}[H]
   \begin{center}
     \includegraphics{cladeExample}
     \end{center}
   \caption{The sample phylogenetic tree reconstructed from an
-    imaginary Neighbors-predicted phylogenetic neighborhood. The
-    terminal nodes (encircled), or leaves, represent genomes. Target
-    leaves are filled with grey.}\label{fig:cladeExample}
+    imaginary phylogenetic neighborhood predicted with the Neighbors
+    package. The terminal nodes (encircled), or leaves, represent
+    genomes. Target leaves are filled with
+    grey.}\label{fig:cladeExample}
 \end{figure}
 
 A clade rooted on the node \textbf{2} is the lowest common ancestor of
 all putative targets (nodes \textbf{10}, \textbf{13}, and
 \textbf{15}). If we consider this a target clade, we have also to
-consider the nodes \textbf{12}, \textbf{7}, \textbf{8}, \textbf{14},
-and \textbf{3} to be targets too. Some targets do can be misclassified
-by Neighbors~\cite{hau23:nei}, but in this case we get almost all
-accessions as misclassified. Thus, instead of finding the common
-ancestor of \textit{all} predicted targets, we want finding a node
-which roots \textit{most} of the predicted targets. It is the node
-\textbf{6}. In this case, we have only one node misclassified
-(\textbf{15}) and this seems to be much more plausible.
+consider the nodes \textbf{12}, \textbf{7}, \textbf{8}, and
+\textbf{14} to be targets too. Some targets do can be misclassified by
+Neighbors~\cite{hau23:nei}, but in this case we get almost all
+accessions misclassified. Thus, instead of finding the common ancestor
+of \textit{all} predicted targets, we want finding a node which roots
+\textit{most} of the predicted targets. It is the node \textbf{6}. In
+this case, we have only one node misclassified (\textbf{15}) and this
+seems to be much more plausible.
 
-We had the target nodes marked, so we could locate the target clade
-visually. This intuitive analysis has to be formalized for working
-with text trees. I suggest the following algorithm:
+In the example above, we have the target nodes marked, so we can
+locate the target clade visually. This intuitive analysis has to be
+formalized for working with the text trees. I suggest the following
+algorithm:
 
 \begin{enumerate}
 \item start with the root of the input tree;
 \item pick the child nodes of the root;
 \item select the child that roots a subtree containing more target
-  leaves than the other child;
+  leaves than the subtree rooted by the other child;
 \item set the selected child to be a new root;
 \item repeat the previous 3 steps until we reject a clade consisting
   of predicted targets completely;
@@ -67,15 +68,16 @@ with text trees. I suggest the following algorithm:
 
 Thus, by subsequent removal of non-target leaves from the tree, we
 will reach the node that is the common ancestor for all targets and
-some of their closest neighbors. The resulting tree will be much
-smaller than the original one, since almost all neighbors will be
-removed from it. Such a tree is easier to analyze.
+some of their closest neighbors. The resulting tree is much smaller
+than the original one, since almost all neighbors are removed from
+it. Such a tree is easier to analyze.
 
-These steps are implemented in \texttt{fita} (\textbf{fi}nd \textbf{ta}rgets).
+These steps are implemented in \texttt{fita} (\textbf{fi}nd
+\textbf{ta}rgets).
 
 \section{Implementation}
-The program \texttt{fita} has the main function logic and has hooks
-for auxillary variables, functions, and imports.
+The program \texttt{fita} has the main function logic and additional
+hooks for auxillary variables, functions, and imports.
 #+end_export
 
 #+begin_src go <<fita.go>>=
@@ -96,7 +98,7 @@ for auxillary variables, functions, and imports.
 #+begin_export latex
 In the main function we set the usage, declare and parse the options,
 read the input files, find the root node, perform iterative voting,
-and return the resulting tree with maximized number of target leaves.
+and write the resulting subtree.
 #+end_export
 
 #+begin_src go <<Main function>>=
@@ -131,7 +133,7 @@ We import \texttt{clio}.
 
 #+begin_export latex
 The user can set the name of the input files (\texttt{-t} for the tree
-and \texttt{-l} for the list targets), and set the name of the output
+and \texttt{-l} for the list of targets), and set the name of the output
 file (\texttt{-o}).
 #+end_export
 
@@ -150,8 +152,7 @@ file (\texttt{-o}).
 #+end_src
 
 #+begin_export latex
-We parse the options and respond to a request for the version, as this
-would terminate the program
+We parse the options.
 #+end_export
 
 #+begin_src go <<Parse options>>=
@@ -168,7 +169,8 @@ We read a \texttt{Newick} tree from a file using a scanner from the
 
   treeFile, err := os.Open(treePath)
   if err != nil {
-	  fmt.Printf("couldn’t open %q", treePath)
+	  fmt.Printf("couldn’t open %q\n", treePath)
+	  os.Exit(1)
   }
   defer treeFile.Close()
   sc := nwk.NewScanner(treeFile)
@@ -194,7 +196,8 @@ We read the list of target names.
 
   targetListFile, err := os.Open(targetListPath)
   if err != nil {
-	  fmt.Printf("couldn’t open %q", targetListPath)
+	  fmt.Printf("couldn’t open %q\n", targetListPath)
+	  os.Exit(1)
   }
   defer targetListFile.Close()
 
@@ -272,9 +275,9 @@ The voting itself has the following steps:
 #+end_src
 
 #+begin_export latex
-Tracking the visited nodes is needed for further functions. We declare
-an array to keep IDs of the visited nodes. The array is to be reset
-each time a node-visiting function is called.
+The tracking the visited nodes is needed for traversing the tree. We
+declare an array to keep IDs of the visited nodes. The array is to be
+reset each time a node-visiting function is called.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
@@ -303,13 +306,13 @@ subtree rooted on the node \texttt{n}. We use \texttt{cN} to track the
 current node and \texttt{visIds} to track nodes we've already
 visited. The current node is set to a child (\texttt{cN.Child}) until
 a terminal node (a leaf) is reached (\texttt{cN.Child == nil}), then
-the leaf's Label is appended to the \texttt{leafL} slice. In case
+the leaf Label is appended to the \texttt{leafL} slice. In case
 \texttt{cN.Id} is in \texttt{visIds}, we set \texttt{cN} to
 \texttt{cN.Sib}. The absence of a Sibling (\texttt{cN.Sib == nil})
 means that we have already traversed all child nodes in the given
 subtree, so we set \texttt{cN} to its parent (\texttt{cN.Parent}).
 
-The loop stops when Id of the input node \texttt{n} is appended to
+The loop stops when the Id of the input node \texttt{n} is appended to
 \texttt{visIds}. After that, \texttt{leafL}| is returned.
 #+end_export
 
@@ -350,7 +353,7 @@ We declare \texttt{leafL}
 
 #+begin_export latex
 We apply \texttt{getLeaves()} to the children of the current root to
-get an array of the leaf labels.
+get slices of the leaf labels.
 #+end_export
 
 #+begin_src go <<Get leaf labels>>=
