@@ -98,7 +98,7 @@ hooks for auxillary variables, functions, and imports.
 #+begin_export latex
 In the main function we set the usage, declare and parse the options,
 read the input files, find the root node, perform iterative voting,
-and write the resulting subtree.
+and print the results.
 #+end_export
 
 #+begin_src go <<Main function>>=
@@ -108,7 +108,7 @@ and write the resulting subtree.
   //<<Read input>>
   //<<Find the root and its children>>
   //<<Iterative voting>>
-  //<<Write the resulting subtree>>
+  //<<Print the results>>
 #+end_src
 
 #+begin_export latex
@@ -138,9 +138,9 @@ file (\texttt{-o}).
 #+end_export
 
 #+begin_src go <<Declare options>>=
-  var optT = flag.String("t", "", "input tree file")
-  var optL = flag.String("l", "", "list of targets")
-  var optO = flag.String("o", "", "name of the output file")
+  var optT = flag.String("t", "", "the input tree")
+  var optL = flag.String("l", "", "list of the targets")
+  var optS = flag.Bool("s", false, "print the run stats")
 #+end_src
 
 #+begin_export latex
@@ -219,23 +219,23 @@ We import \texttt{bufio}.
 #+begin_export latex
 We initialize 3 variables:
 \begin{description}
-\item[\texttt{cR}] to track the current root node;
-\item[\texttt{aChild}] for the first child of the current root.
-\item[\texttt{bChild}] for the second child of the current root.
+\item[\texttt{cRoot}] to track the current root node;
+\item[\texttt{rChild}] for the right child of the current root.
+\item[\texttt{lChild}] for the left child of the current root.
 \end{description}
 The initial values are the root of the input tree and its respective
 children.
 #+end_export
 
 #+begin_src go <<Find the root and its children>>=
-  var cR *nwk.Node = sc.Tree()
-  var aChild *nwk.Node = cR.Child
-  var bChild *nwk.Node = aChild.Sib
+  var cRoot *nwk.Node = sc.Tree()
+  var rChild *nwk.Node = cRoot.Child
+  var lChild *nwk.Node = rChild.Sib
 #+end_src
 
 #+begin_export latex
 The essence of the 'voting' is to decide which of the two clades
-(\texttt{aChild} or \texttt{bChild}) has more target leaves (votes)
+(\texttt{rChild} or \texttt{lChild}) has more target leaves (votes)
 --this is the winning clade. After the winning clade is defined, we
 move to its root and repeat the voting. We do this until a losing
 clade (which has less target leaves than the winning one) contains
@@ -270,103 +270,56 @@ The voting itself has the following steps:
 	  //<<Count votes>>
 	  //<<Choose winner>>
 	  round++
-	  cR = cR.Parent
+	  cRoot = cRoot.Parent
   }
 #+end_src
 
 #+begin_export latex
-The tracking the visited nodes is needed for traversing the tree. We
-declare an array to keep IDs of the visited nodes. The array is to be
-reset each time a node-visiting function is called.
-#+end_export
-
-#+begin_src go <<Auxillary variables>>=
-  var visIds []int
-#+end_src
-
-#+begin_export latex
-We declare a function for checking if an integer is present in a
-slice of integers.
+The recursive function \texttt{getLeafLabels(n)} returns a slice of
+the leaf labels of a subtree rooted on the node \texttt{n}.
 #+end_export
 
 #+begin_src go <<Functions>>=
-  func isInInt(slice []int, value int) bool {
-	  for _, x := range slice {
-		  if x == value {
-			  return true
-		  }
+  func getLeafLabels(n *nwk.Node) []string {
+	  if n.Child == nil {
+		  labelsTemp = append(labelsTemp, n.Label)
+	  } else {
+		  getLeafLabels(n.Child.Sib)
+		  getLeafLabels(n.Child)
 	  }
-	  return false
-  }
-#+end_src
-
-#+begin_export latex
-The function \texttt{getLeaves(n)} returns a slice of leaf labels of a
-subtree rooted on the node \texttt{n}. We use \texttt{cN} to track the
-current node and \texttt{visIds} to track nodes we've already
-visited. The current node is set to a child (\texttt{cN.Child}) until
-a terminal node (a leaf) is reached (\texttt{cN.Child == nil}), then
-the leaf Label is appended to the \texttt{leafL} slice. In case
-\texttt{cN.Id} is in \texttt{visIds}, we set \texttt{cN} to
-\texttt{cN.Sib}. The absence of a Sibling (\texttt{cN.Sib == nil})
-means that we have already traversed all child nodes in the given
-subtree, so we set \texttt{cN} to its parent (\texttt{cN.Parent}).
-
-The loop stops when the Id of the input node \texttt{n} is appended to
-\texttt{visIds}. After that, \texttt{leafL}| is returned.
-#+end_export
-
-#+begin_src go <<Functions>>=
-  func getLeaves(n *nwk.Node) []string {
-	  visIds = nil
-	  leafL = nil
-	  cN := n //cN is a current node
-	  for !isInInt(visIds, n.Id) {
-		  if isInInt(visIds, cN.Id){
-			  if cN.Sib == nil {
-			  cN = cN.Parent
-			  visIds = append(visIds, cN.Id)
-			  } else {
-				  cN = cN.Sib
-			  }
-		  } else {
-			  if cN.Child == nil {
-				  leafL = append(leafL, cN.Label)
-				  visIds = append(visIds, cN.Id)
-			  } else {
-				  cN = cN.Child
-			  }
-		  }
-	  }
-	  return leafL
+	  return labelsTemp
   }
 
 #+end_src
 
 #+begin_export latex
-We declare \texttt{leafL}
+We declare \texttt{labelsTemp}.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
-  var leafL []string
+  var labelsTemp []string
 #+end_src
 
 #+begin_export latex
-We apply \texttt{getLeaves()} to the children of the current root to
-get slices of the leaf labels.
+We apply \texttt{getLeafLabels()} to the children of the current root
+to get slices of the leaf labels. As the returned slice
+(\texttt{labelsTemp}) is declared outside the
+\texttt{getLeafLabels()}, we reset it after we call the function.
 #+end_export
 
 #+begin_src go <<Get leaf labels>>=
-  aLeaves = getLeaves(aChild)
-  bLeaves = getLeaves(bChild)
+  rLeafLabels = getLeafLabels(rChild)
+    labelsTemp = nil
+  lLeafLabels = getLeafLabels(lChild)
+    labelsTemp = nil
 #+end_src
 
 #+begin_export latex
-We declare \texttt{aLeaves} and \texttt{bLeaves}.
+We declare \texttt{rLeafLabels} and \texttt{lLeafLabels}.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
-var aLeaves, bLeaves []string
+var rLeafLabels, lLeafLabels []string
 #+end_src
 
 #+begin_export latex
@@ -390,8 +343,8 @@ We count votes.
 #+end_export
 
 #+begin_src go <<Count votes>>=
-  aVotes = countVotes(aLeaves, targetList)
-  bVotes = countVotes(bLeaves, targetList)
+  rVotes = countVotes(rLeafLabels, targetList)
+  lVotes = countVotes(lLeafLabels, targetList)
 #+end_src
 
 #+begin_export latex
@@ -411,11 +364,11 @@ We declare function for votes counting.
 #+end_src
 
 #+begin_export latex
-The initial value of \texttt{aVotes} and \texttt{bVotes} is zero.
+The initial value of \texttt{rVotes} and \texttt{lVotes} is zero.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
-  var aVotes, bVotes int = 0, 0
+  var rVotes, lVotes int = 0, 0
 #+end_src
 
 #+begin_export latex
@@ -423,51 +376,50 @@ We choose the winning clade.
 #+end_export
 
 #+begin_src go <<Choose winner>>=
-  if aVotes > bVotes {
-	  cR = aChild
-	  losVotes = bVotes
-	  losLeaves = len(bLeaves)
-	  winVotes = aVotes
-	  winLeaves = aLeaves
-	  aChild = cR.Child
-	  bChild = aChild.Sib
+  if rVotes > lVotes {
+	  cRoot = rChild
+	  losVotes = lVotes
+	  losLeaves = len(lLeafLabels)
+	  winVotes = rVotes
+	  winLeaves = rLeafLabels
+	  rChild = cRoot.Child
+	  lChild = rChild.Sib
   } else {
-	  cR = bChild
-	  losVotes = aVotes
-	  losLeaves = len(aLeaves)
-	  winVotes = bVotes
-	  winLeaves = bLeaves
-	  aChild = cR.Child
-	  bChild = aChild.Sib
+	  cRoot = lChild
+	  losVotes = rVotes
+	  losLeaves = len(rLeafLabels)
+	  winVotes = lVotes
+	  winLeaves = lLeafLabels
+	  rChild = cRoot.Child
+	  lChild = rChild.Sib
   }
 #+end_src
 
 #+begin_export latex
-When the iterative voting is over, we write the resulting tree as a
-string to a file. We remove the first character which has to be comma.
+When the iterative voting is over, we print the resulting tree to
+\texttt{stdout}. We remove the first character which has to be comma
+and add semicolon to the end of the string. If the \texttt{s} flag is
+used, we print the stats of the run.
 #+end_export
 
-#+begin_src go <<Write the resulting subtree>>=
-  oFile, err := os.Create(*optO)
-	  if err != nil {
-		  fmt.Println(err)
-	  } else {
-		  oFile.WriteString(cR.String()[1:])
-	  }
-	  oFile.Close()
-
+#+begin_src go <<Print the results>>=
+  if *optS != false {
   fmt.Printf(
 	  "After %d rounds of voting,",
 	  round)
   fmt.Printf(
 	  "\n a subtree rooted on the node '%s' is found.",
-	  cR.Label)
+	  cRoot.Label)
   fmt.Printf(
 	  "\n The subtree has %d leaves",
 	  len(winLeaves))
   fmt.Printf(
 	  "\n including %d of %d targets.\n",
-	   winVotes, len(targetList))
+	  winVotes, len(targetList))
+  fmt.Printf(" The subtree:\n\n")	
+  }
+
+  fmt.Printf("%s;\n", cRoot.String()[1:])
 #+end_src
 
 #+begin_export latex
