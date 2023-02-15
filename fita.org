@@ -289,7 +289,6 @@ the leaf labels of a subtree rooted on the node \texttt{n}.
 	  }
 	  return labelsTemp
   }
-
 #+end_src
 
 #+begin_export latex
@@ -398,8 +397,9 @@ We choose the winning clade.
 #+begin_export latex
 When the iterative voting is over, we print the resulting tree to
 \texttt{stdout}. We remove the first character which has to be comma
-and add semicolon to the end of the string. If the \texttt{s} flag is
-used, we print the stats of the run.
+and insert a parenthesis and a semicolon in the beginning end the of
+the string, respectively, to designate the root properly. If the
+\texttt{s} flag is used, we print the stats of the run.
 #+end_export
 
 #+begin_src go <<Print the results>>=
@@ -419,7 +419,7 @@ used, we print the stats of the run.
   fmt.Printf(" The subtree:\n\n")	
   }
 
-  fmt.Printf("%s;\n", cRoot.String()[1:])
+  fmt.Printf("(%s;\n", cRoot.String()[1:])
 #+end_src
 
 #+begin_export latex
