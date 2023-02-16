@@ -119,7 +119,7 @@ purpose of \texttt{fita}, and an example command.
 #+begin_src go <<Set usage>>=
   u := "fita [tree file]... [target list file]... [option]"
   p := "Find the target clade subtree."
-  e := "fita -t tree.nwk -l targets.txt --verbose"
+  e := "fita -t tree.nwk -l targets.txt -verbose"
   clio.Usage(u, p, e)
 #+end_src
 
@@ -140,7 +140,8 @@ verbose mode (\texttt{--verbose}).
 #+begin_src go <<Declare options>>=
   var optT = flag.String("t", "", "the input tree")
   var optL = flag.String("l", "", "list of the targets")
-  var optVerbose = flag.Bool("verbose", false, "verbose mode")
+  var optVerbose = flag.Bool("verbose", false, "verbose mode" +
+	  " (the output may be incompatible with piping)")
 #+end_src
 
 #+begin_export latex
