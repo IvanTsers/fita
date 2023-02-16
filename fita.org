@@ -117,9 +117,9 @@ purpose of \texttt{fita}, and an example command.
 #+end_export
 
 #+begin_src go <<Set usage>>=
-  u := "fita [tree file]... [target list file]..."
+  u := "fita [tree file]... [target list file]... [option]"
   p := "Find the target clade subtree."
-  e := "fita -t tree.nwk -l targets.txt"
+  e := "fita -t tree.nwk -l targets.txt --verbose"
   clio.Usage(u, p, e)
 #+end_src
 
@@ -132,15 +132,15 @@ We import \texttt{clio}.
 #+end_src
 
 #+begin_export latex
-The user can set the name of the input files (\texttt{-t} for the tree
-and \texttt{-l} for the list of targets), and set the name of the output
-file (\texttt{-o}).
+The user sets the name of the input files (\texttt{-t} for the tree
+and \texttt{-l} for the list of targets). The user can opt to use
+verbose mode (\texttt{--verbose}).
 #+end_export
 
 #+begin_src go <<Declare options>>=
   var optT = flag.String("t", "", "the input tree")
   var optL = flag.String("l", "", "list of the targets")
-  var optS = flag.Bool("s", false, "print the run stats")
+  var optVerbose = flag.Bool("verbose", false, "verbose mode")
 #+end_src
 
 #+begin_export latex
@@ -251,7 +251,7 @@ to be able to print out summary.
   var losVotes int = 0
   var winVotes int = 0
   var winLeaves []string
-  var round int = 0
+  var round int = 1
 #+end_src
 
 #+begin_export latex
@@ -259,44 +259,35 @@ The voting itself has the following steps:
 \begin{enumerate}
 \item get the labels of leaves of a subtree;
 \item count targets among these leaves;
-\item choose the winning clade
+\item choose the winning clade.
 \end{enumerate}
+If \texttt{fita} runs in the verbose mode (\texttt{--verbose}), the
+summary on intermediate results is printed out.
 
 #+end_export
 
 #+begin_src go <<Iterative voting>>=
   for losVotes != losLeaves {
+	  //<<Reset the previous results>>
 	  //<<Get leaf labels>>
 	  //<<Count votes>>
 	  //<<Choose winner>>
+	  if *optVerbose {
+	  //<<--verbose: the round results>>
+	  }
 	  round++
 	  cRoot = cRoot.Parent
   }
 #+end_src
 
 #+begin_export latex
-The recursive function \texttt{getLeafLabels(n)} returns a slice of
-the leaf labels of a subtree rooted on the node \texttt{n}.
+In the beginning of each round we reset the number of votes and the
+label slices.
 #+end_export
 
-#+begin_src go <<Functions>>=
-  func getLeafLabels(n *nwk.Node) []string {
-	  if n.Child == nil {
-		  labelsTemp = append(labelsTemp, n.Label)
-	  } else {
-		  getLeafLabels(n.Child.Sib)
-		  getLeafLabels(n.Child)
-	  }
-	  return labelsTemp
-  }
-#+end_src
-
-#+begin_export latex
-We declare \texttt{labelsTemp}.
-#+end_export
-
-#+begin_src go <<Auxillary variables>>=
-  var labelsTemp []string
+#+begin_src go <<Reset the previous results>>=
+  rVotes, lVotes = 0, 0
+  rLeafLabels, lLeafLabels = nil, nil
 #+end_src
 
 #+begin_export latex
@@ -307,10 +298,8 @@ to get slices of the leaf labels. As the returned slice
 #+end_export
 
 #+begin_src go <<Get leaf labels>>=
-  rLeafLabels = getLeafLabels(rChild)
-    labelsTemp = nil
-  lLeafLabels = getLeafLabels(lChild)
-    labelsTemp = nil
+  rLeafLabels = getLeafLabels(rChild.Child, rLeafLabels)
+  lLeafLabels = getLeafLabels(lChild.Child, lLeafLabels)
 #+end_src
 
 #+begin_export latex
@@ -322,18 +311,20 @@ var rLeafLabels, lLeafLabels []string
 #+end_src
 
 #+begin_export latex
-We declare a function for checking if a string is present in a slice
-of strings.
+The function \texttt{getLeafLabels()} runs recursively across a tree
+rooted on the node \texttt{n} and returns a slice of the leaf labels
+of a subtree.
 #+end_export
 
 #+begin_src go <<Functions>>=
-  func isInString(slice []string, value string) bool {
-	  for _, x := range slice {
-		  if x == value {
-			  return true
-		  }
+  func getLeafLabels(n *nwk.Node, l []string) []string {
+	  if n == nil {return l}
+	  if n.Child == nil {
+		  l = append(l, n.Label)
 	  }
-	  return false
+	  l = getLeafLabels(n.Child, l)
+	  l = getLeafLabels(n.Sib, l)
+	  return l
   }
 #+end_src
 
@@ -359,6 +350,22 @@ We declare function for votes counting.
 		  }
 	  }
   return votes
+  }
+#+end_src
+
+#+begin_export latex
+We declare a function for checking if a string is present in a slice
+of strings.
+#+end_export
+
+#+begin_src go <<Functions>>=
+  func isInString(slice []string, value string) bool {
+	  for _, x := range slice {
+		  if x == value {
+			  return true
+		  }
+	  }
+	  return false
   }
 #+end_src
 
@@ -395,6 +402,16 @@ We choose the winning clade.
 #+end_src
 
 #+begin_export latex
+We print the results of the current voting round.
+#+end_export
+
+#+begin_src go <<--verbose: the round results>>=
+  fmt.Printf(
+	  " round: %d\twinner: %s\tvotes: %d\tleaves: %d\n",
+	  round, cRoot.Label, winVotes, len(winLeaves))
+#+end_src
+
+#+begin_export latex
 When the iterative voting is over, we print the resulting tree to
 \texttt{stdout}. We remove the first character which has to be comma
 and insert a parenthesis and a semicolon in the beginning end the of
@@ -403,23 +420,24 @@ the string, respectively, to designate the root properly. If the
 #+end_export
 
 #+begin_src go <<Print the results>>=
-  if *optS != false {
-  fmt.Printf(
-	  "After %d rounds of voting,",
-	  round)
-  fmt.Printf(
-	  "\n a subtree rooted on the node '%s' is found.",
-	  cRoot.Label)
-  fmt.Printf(
-	  "\n The subtree has %d leaves",
-	  len(winLeaves))
-  fmt.Printf(
-	  "\n including %d of %d targets.\n",
-	  winVotes, len(targetList))
-  fmt.Printf(" The subtree:\n\n")	
+  if *optVerbose {
+	  //<<--verbose: run summary>>
   }
-
   fmt.Printf("(%s;\n", cRoot.String()[1:])
+#+end_src
+
+#+begin_export latex
+We print the summary of all voting rounds.
+#+end_export
+
+#+begin_src go <<--verbose: run summary>>=
+  fmt.Printf(
+	  " final: %d\twinner: %s\tvotes: %d\tleaves: %d\n",
+	  round, cRoot.Label, winVotes, len(winLeaves))
+  fmt.Printf(
+	  "\nThe found target clade has %d of %d targets.\n",
+	  winVotes, len(targetList))
+  fmt.Printf("\nThe target clade:\n\n")	
 #+end_src
 
 #+begin_export latex
