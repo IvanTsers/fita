@@ -296,11 +296,23 @@ We apply \texttt{getLeafLabels()} to the children of the current root
 to get slices of the leaf labels. As the returned slice
 (\texttt{labelsTemp}) is declared outside the
 \texttt{getLeafLabels()}, we reset it after we call the function.
+
+WARNING: one of the children may be a terminal node...
 #+end_export
 
 #+begin_src go <<Get leaf labels>>=
-  rLeafLabels = getLeafLabels(rChild.Child, rLeafLabels)
-  lLeafLabels = getLeafLabels(lChild.Child, lLeafLabels)
+  //check fo the terminal node
+  if rChild.Child == nil {
+	  rLeafLabels = append(rLeafLabels, rChild.Label)
+  } else {
+	  rLeafLabels = getLeafLabels(rChild.Child, rLeafLabels)
+  }
+
+  if lChild.Child == nil {
+	  lLeafLabels = append(lLeafLabels, lChild.Label)
+  } else {
+	  lLeafLabels = getLeafLabels(lChild.Child, lLeafLabels)
+  }
 #+end_src
 
 #+begin_export latex
@@ -319,7 +331,7 @@ of a subtree.
 
 #+begin_src go <<Functions>>=
   func getLeafLabels(n *nwk.Node, l []string) []string {
-	  if n == nil {return l}
+	  if n == nil {return l} //else {fmt.Printf("    we are here, %s\n", n.Label)}
 	  if n.Child == nil {
 		  l = append(l, n.Label)
 	  }
@@ -385,20 +397,20 @@ We choose the winning clade.
 #+begin_src go <<Choose winner>>=
   if rVotes > lVotes {
 	  cRoot = rChild
-	  losVotes = lVotes
-	  losLeaves = len(lLeafLabels)
 	  winVotes = rVotes
 	  winLeaves = rLeafLabels
 	  rChild = cRoot.Child
 	  lChild = rChild.Sib
+	  losVotes = lVotes
+	  losLeaves = len(lLeafLabels)
   } else {
 	  cRoot = lChild
-	  losVotes = rVotes
-	  losLeaves = len(rLeafLabels)
 	  winVotes = lVotes
 	  winLeaves = lLeafLabels
 	  rChild = cRoot.Child
 	  lChild = rChild.Sib
+	  losVotes = rVotes
+	  losLeaves = len(rLeafLabels)
   }
 #+end_src
 
@@ -433,11 +445,12 @@ We print the summary of all voting rounds.
 
 #+begin_src go <<--verbose: run summary>>=
   fmt.Printf(
-	  " final: %d\twinner: %s\tvotes: %d\tleaves: %d\n",
-	  round, cRoot.Label, winVotes, len(winLeaves))
+	  " round: %d\tone of the clades consists of targets only\n",
+	  round-1)
   fmt.Printf(
+	  " round: %d\treturned to the parent node (%s)\n" +
 	  "\nThe found target clade has %d of %d targets.\n",
-	  winVotes, len(targetList))
+	  round-1, cRoot.Label, winVotes, len(targetList))
   fmt.Printf("\nThe target clade:\n\n")	
 #+end_src
 
