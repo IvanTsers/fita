@@ -11,5 +11,5 @@ dvipdf fitaDoc
 # Tangle
 grep -v '^$' fita.org | bash org2nw.sed | notangle -Rfita.go | gofmt > fita.go
 
-# Clean up
+# Clean
 rm -f fita\.tex *\.blg *\.aux *\.bbl *\.dvi
