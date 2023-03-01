@@ -2,3 +2,8 @@ github.com/evolbioinf/clio v0.0.0-20210309091639-82cb91a31b0c h1:TkHWkaNNpQC+/HC
 github.com/evolbioinf/clio v0.0.0-20210309091639-82cb91a31b0c/go.mod h1:Jh4QPiChVHZHe7fwj+xcSs6kUcQbQVzsd/ht3PIoaaU=
 github.com/evolbioinf/nwk v0.0.0-20230129095444-f1548e0e0397 h1:lVa91bMHP7MbtrTT3gsanYVgPsE0KG0YzKsl6fCpWYE=
 github.com/evolbioinf/nwk v0.0.0-20230129095444-f1548e0e0397/go.mod h1:AduknVpv3xviFarKiTVjKI73aA5fje7tY3k8ILXwB8I=
+github.com/mpraski/clusters v0.0.0-20171016094157-18104487c312 h1:XDW24M0xpJ83twch860OuhzUPKWfVOg2qoDBtYOo+UY=
+github.com/mpraski/clusters v0.0.0-20171016094157-18104487c312/go.mod h1:1wDbOlBLClLuyu3ggcgsE1QGcWd1/LywIS9JymHVgZg=
+golang.org/x/exp v0.0.0-20191002040644-a1355ae1e2c3 h1:n9HxLrNxWWtEb1cA950nuEEj3QnKbtsCJ6KjcgisNUs=
+gonum.org/v1/gonum v0.12.0 h1:xKuo6hzt+gMav00meVPUlXwSdoEJP46BR+wdxQEFK2o=
+gonum.org/v1/gonum v0.12.0/go.mod h1:73TDxJfAAHeA8Mk9mf8NlIppyhQNo5GLTcYeqgo2lvY=
