@@ -1,113 +1,124 @@
 #+begin_export latex
+\maketitle
 \section{Introduction}
 The search of genetic markers in whole genome sequences (as
 implemented in \texttt{fur}~\cite{hau21:fur}) requires finding a set
-of closely realted genomes making up a \textit{phylogenetic
-  neighborhood}, which may include hundreds of genomes. The Neighbors
+of closely realted genomes that make up a \textit{phylogenetic
+  neighborhood}. It may include hundreds of genomes. The Neighbors
 package~\cite{hau23:nei} allows to discover such phylogenetic
-neighborhoods using automated parsing of NCBI taxonomy. The parsing
-returns a set of genomic accessions separated into \textbf{targets}
-and \textbf{neighbors}. However, a taxonomic tree of the given
-accessions may differ from actual phylogenetic tree
-~\cite{hau23:nei}. Therefore, it is reasonable to check the output of
-the Neighbors pipeline through phylogenetic analysis. This requires a
-\textit{de novo} reconstruction of the phylogeny of hundreds of
-genomes followed by a search of the clade of the targets in the
-resulting large phylogenetic tree. Effective tools for large-sample
-phylogenetic analysis are present (e.g. \texttt{phylonium}
-~\cite{kloe19:phy}), but there are no tools for the automated
-separation of targets and neighbors. The given document introduces
-\texttt{fita}, a \texttt{Go} program designed to handle the automated
-search of the target clade in a phylogenetic tree.
+neighborhoods through automated querying of the NCBI taxonomy. The
+querying yields a table of taxonomic identifiers (taxids) and
+references to genomic sequences associated with them. The accessions
+of this table are separated into \textbf{targets} and
+\textbf{neighbors}. However, a taxonomic tree of given taxids may not
+reflect the real phylogenetic relations between the corresponding
+genomes ~\cite{hau23:nei}. Therefore, it is reasonable to check the
+output of Neighbors through \textit{de novo} reconstruction of the
+phylogenetic tree followed by finding the target clade in
+it. Effective tools for large-sample phylogenetic analysis are present
+(e.g. \texttt{phylonium} ~\cite{kloe19:phy}), but there are no tools
+for automated separation of targets from neighbors.\par
+
+The given document introduces \texttt{fita}, a \texttt{Go} CLI program
+for automated search of the target clade in a phylogenetic tree. The
+program takes a \texttt{Newick} tree as the input, and returns a
+\texttt{Newick} subtree containing the targets.
 
 \section{Approach}
-We assume that the target genomes are more similar to each other than
-to any of the neighbor genomes. In other words, the targets are
-expected to form a clade on a phylogenetic tree. Let's consider a
-phylogenetic neighborhood of 86 random \textit{E. coli} O157:H7
-genomes (a subset of the neighborhood predicted by \texttt{neighbors}
-for \texttt{taxid 83334} ~\cite{hau23:nei}). Twenty-seven and 59 of
-the genomes had been marked as \textbf{targets} and
-\textbf{neighbors}, respectively. The evolutionary distances between
-these sequences was estimated using \texttt{phylonium}, and a
-phylogenetic tree for them was built (Figure~\ref{fig:cladeExample}).
+We assume that target genomes are more similar to each other than to
+any of neighbor genomes. In other words, the targets are expected to
+form a clade on a phylogenetic tree. Let's consider a phylogenetic
+neighborhood of 86 random \textit{E. coli} O157:H7 genomes (a subset
+of the neighborhood predicted by \texttt{neighbors} for \texttt{taxid
+  83334} ~\cite{hau23:nei}). Twenty-seven and 59 of the genomes were
+marked as \textbf{targets} and \textbf{neighbors}, respectively. The
+evolutionary distances between these genomes were estimated using
+\texttt{phylonium}, and a phylogenetic tree for them was built
+(Figure~\ref{fig:cladeExample}).
 
 \begin{figure}[H]
   \begin{center}
     \includegraphics{fig/cladeExample}
     \end{center}
   \caption{The example phylogenetic tree reconstructed for the
-    \textit{E. coli} O157:H7 phylogenetic neighborhood predicted using
+    \textit{E. coli} O157:H7 phylogenetic neighborhood predicted with
     the Neighbors package. Target leaves are marked with grey
     circles. The arrows indicate the lowest common ancestor of every
     target (black) or the majority of targets
     (grey).}\label{fig:cladeExample}
 \end{figure}
 
-The clade rooted on the node denoted by the black arrow contains 77
+The clade rooted on the node indicated by black arrow contains 77
 leaves and includes all the tagrets predicted with
 \texttt{neighbors}. If we accept it as a target clade, we also have to
-classify 50 more leaves as targets in addition to the original 27
-ones. Some targets can indeed be misclassified by
-\texttt{neighbors}~\cite{hau23:nei}, but in this case we misclassify
-almost all used accessions. So, instead of finding the common ancestor
-of \textit{every} predicted target, we want to find a node which roots
-the \textit{majority} of the predicted targets. For example, the clade
-rooted on the node marked with grey arrow contains 24 targets among
-its 37 leaves. In this case, most of the neighbors and all obviously
-misclassified targets are removed from the tree.
+classify 50 more leaves as new targets in addition to the original 27
+ones we searched for. Some targets can indeed be misclassified by
+\texttt{neighbors}~\cite{hau23:nei}, since the program relies on the
+original NCBI Taxonomy tree. However, in our case we misclassify
+almost all considered genomes.\par
 
-In the considered example, we had the target nodes marked, so we could
-locate the target clade visually. This intuitive analysis has to be
-formalized to process text trees. I suggest the following workflow:
+To minimize the number of misclassified genomes, we may search for the
+LCA of the \textit{majority} of the targets instead of LCA of
+\texttt{every} target. For example, the clade rooted on the node
+indicated by grey arrow contains 24 targets among its 37 leaves. In
+this case, most of the neighbors and all obviously misclassified
+targets can be removed from the tree.\par
 
-\begin{enumerate}
+In the considered example, we could easily see the target clade. This
+intuitive analysis has to be formalized to enable processing of
+\texttt{Newick} trees. I suggest the following workflow:
+
+\begin{enumerate}[itemsep = -2pt]
 \item start with the root of the input tree;
 \item pick the child nodes;
-\item select the child that roots a subtree containing more target
-  leaves than the subtree rooted by the other child;
-\item set the selected child to be a new root;
-\item repeat the previous 3 steps until we reject a clade consisting
-  of predicted targets completely;
-\item return the resulting subtree.
+\item select the child that roots a subtree containing more targets
+  (predicted by \texttt{neighbors}) than the subtree rooted by the
+  other child;
+\item repeat the previous 2 steps until we reject a clade consisting
+  only of the targets;
+\item return the tree rooted on the parent of the last processed pair
+  of nodes.
 \end{enumerate}
 
-By subsequent removal of non-target leaves from the tree, we reach the
-common ancestor of the majority of targets and some of their closest
-neighbors. The resulting tree is much smaller than the original one,
-since almost all neighbors are removed from it
-(Figure~\ref{fig:cladeReduced}).
+We remove non-target leaves from the tree as we follow the listed
+steps. We eventually reach the common ancestor of the majority of
+targets and some of their closest neighbors. The resulting tree is
+much smaller than the original one, since almost all neighbors are
+removed from it (Figure~\ref{fig:cladeReduced}).
 
 \begin{figure}[H]
   \begin{center}
     \includegraphics{fig/cladeReduced}
     \end{center}
   \caption{The phylogenetic tree of \textit{E. coli} O157:H7
-    phylogenetic neighborhood after the removal of most of the
-    non-target leaves. Target leaves are marked with grey circles. The
-    white arrow marks the root of the clade which remains after
-    further removal of misclassified leaves.}\label{fig:cladeReduced}
+    phylogenetic neighborhood after removal of most of the non-target
+    leaves. The target leaves are marked with grey circles. The white
+    arrow marks the 'core target clade'---the clade which will remain
+    after an additional round of removal of the misclassified
+    genomes.}\label{fig:cladeReduced}
 \end{figure}
 
 The tree in the Figure~\ref{fig:cladeReduced} is much easier to
 inspect compared to the tree in the Figure ~\ref{fig:cladeExample}. It
 can be seen that the tree contains a whole clade of neighbors (the
-non-target CP038386, CP003109, CP001846) and an orphan CP033605. These
-4 leaves may be desirable for removal. They can be removed manually
-(e.g. with help of \texttt{pickle}~\cite{hau23:nei}). We can also
-filter the corresponding branches out automatically taking advantage
-of the significant difference in the branch lengths: they are mostly
-longer outside the 'core target clade' which does not include the
-orphan and the neighbor three-leaf clade.\\\\
+non-target genomes CP038386, CP003109, CP001846) and an orphan genome
+CP033605. These 4 genomes may be desirable for removal from the
+tree. They can be removed manually (e.g. with help of \texttt{land}
+and \texttt{pickle} programs~\cite{hau23:nei}). We can also utilize
+the significant difference in the branch lengths to filter out the
+non-targets automatically. The branches are mostly longer outside the
+'core target clade' (indicated by white arrow) which does not include
+the orphan and the neighbor three-leaf clade.\\\\
 
 The program \texttt{fita} (\textbf{fi}nd the \textbf{ta}rgets) is a
 two-step implementation of the described approach. First, it finds the
-lowest common ancestor of the majority of the targets. Second, the
-remaining neighbors and misclassified targets are removed from the
-subtree based on the difference in branch lengths within the
-corresponding clade. The second step is optional so the user can omit
-it in case he or she desires to analyze the tree manually after the
-first step.
+lowest common ancestor (LCA) of the majority of
+\texttt{neighbors}-predicted targets. Second, the remaining neighbors
+and misclassified targets are filtered out from the subtree rooted on
+the found LCA. The filter is based on the difference in branch lengths
+within the clade rooted on the LCA found in the first step. The second
+step is optional so the user can omit it in case he or she desires to
+analyze the tree manually after the first step.
 
 \section{Implementation}
 The program \texttt{fita} is written in \texttt{Go}. It has the main
@@ -151,9 +162,9 @@ purpose of \texttt{fita}, and an example command.
 #+end_export
 
 #+begin_src go <<Set usage>>=
-  u := "fita [options] [tree file] [target list file]"
+  u := "fita [options] [tree file] [list of target genome names]"
   p := "Find the target clade subtree."
-  e := "fita -verbose -c tree.nwk -l targets.txt"
+  e := "fita -verbose -c tree.nwk targets.txt"
   clio.Usage(u, p, e)
 #+end_src
 
@@ -166,14 +177,14 @@ We import \texttt{clio}.
 #+end_src
 
 #+begin_export latex
-The user can opt to use the complete mode (\texttt{-c}) and the
-verbose mode (\texttt{-verbose}). By default, the program only finds
-the clade rooted on the lowest common ancestor (LCA) of the majority
-of targets and prints the found clade out. In the complete mode, the
-program proceeds with removal of the remaining non-targets and
-misclassified targets (if any). In the verbose mode, all intermediate
-results and summary of each step are printed out (thus the output may
-be unsuitable for piping to other programs).
+The user can opt to use complete mode (\texttt{-c}) and verbose mode
+(\texttt{-verbose}). By default, the program only finds the clade
+rooted on the lowest common ancestor (LCA) of the majority of targets
+and prints the found clade out. In complete mode, the program proceeds
+with removal of the remaining non-targets and misclassified targets
+(if any). In verbose mode, all intermediate results and summary of
+each step are printed out (thus the output may be unsuitable for
+piping to other programs).
 #+end_export
 
 #+begin_src go <<Declare and parse options>>=
@@ -196,19 +207,18 @@ be unsuitable for piping to other programs).
 
 #+begin_export latex
 The remaining tokens on the command line are interpreted as the names
-of input files: the first one is a Newick tree, the second one is a
-list of the target names predicted by \texttt{neighbors}. We read a
-\texttt{Newick} tree from a file using a scanner from the \texttt{nwk}
-package.
+of input files: the first one is a \texttt{Newick} tree, the second
+one is a list of the target names predicted by \texttt{neighbors}. We
+read a \texttt{Newick} tree from a file using a scanner from the
+\texttt{nwk} package.
 #+end_export
 
 #+begin_src go <<Read the input>>=
-  //Read the tree
+    // Read the tree
   r := newOsReader(0)
   scNwk := nwk.NewScanner(r)
   scNwk.Scan()
-
-  //Read the target list
+    // Read the target list
   r = newOsReader(1)
   var targetList []string
   scStr := bufio.NewScanner(r)
@@ -253,20 +263,21 @@ We import \texttt{io} and \texttt{os}.
 #+end_src
 
 #+begin_export latex
-Both the search of the LCA of the majority of targets and the removal
-of the misclassified leaves form it are based on \textbf{voting} in
-which one of the two sibling clades selected starting from the
-children of the root of the input tree. If an item (a node or a leaf)
-of a competing clade meets a certain criterion, it adds one vote to
-the pool of the competing clade votes.
+The search of the LCA of the majority of targets and the removal of
+the misclassified leaves are based on \textbf{voting} in which one of
+sibling clades is selected. The voting is iterative and it starts with
+the clades rooted on children of the input tree root. If an item (a
+node or a leaf) of the clade meets a certain criterion, it adds one
+vote to the vote pool of this clade. After the winning clade is
+determined, we perform another voting round with the children of its
+root. We do this until a losing clade (that has less votes) contains
+only the target leaves or has a branch of a threshold length.\par
 
-After the winning clade is determined, we move to its root and repeat
-the voting. We do this until a losing clade (which has less votes)
-contains only target leaves or has a branch of a certain length.  We
-initialize \texttt{losLeaves} and \texttt{losLeaves} to keep the total
-number of leaves and votes in the losing clade. We also declare
-\texttt{winVotes}, \texttt{winLeaves}, and \texttt{rounds} (number of
-voting rounds passed) for printing out summary.
+We declare \texttt{losLeaves} and \texttt{losLeaves}
+to keep the total number of leaves and votes in the losing clade. We
+also declare \texttt{winVotes}, \texttt{winLeaves}, and
+\texttt{rounds} (number of voting rounds passed), which we use to
+print a summary.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
@@ -278,7 +289,9 @@ voting rounds passed) for printing out summary.
 #+end_src
 
 #+begin_export latex
-The first voting is for the leaves.
+We search the LCA of the majority of targets in the first voting. In
+this voting, leaves with labels matching target genome names are
+qualified as voters.
 #+end_export
 
 #+begin_src go <<Find the LCA of the majority of targets>>=
@@ -288,17 +301,17 @@ The first voting is for the leaves.
 #+end_src
 
 #+begin_export latex
-We initialize the voting of the leaves of the input tree with the
-declaration of 5 variables:
-\begin{description}
-\item[\texttt{cRoot}] to track the current root node;
-\item[\texttt{rChild}] for the right child of the current root;
-\item[\texttt{lChild}] for the left child of the current root;
-\item[\texttt{rLeafLabels}] to keep leaf labels of the clade rooted on
+We initialize the voting of leaves with the declaration of 5
+variables:
+\begin{itemize}[itemsep = -2pt]
+\item \texttt{cRoot} to track the current root node;
+\item \texttt{rChild} for the right child of the current root;
+\item \texttt{lChild} for the left child of the current root;
+\item \texttt{rLeafLabels} to keep leaf labels of the clade rooted on
   \texttt{rChild};
-\item[\texttt{lLeafLabels}] to keep leaf labels of the clade rooted on
+\item \texttt{lLeafLabels} to keep leaf labels of the clade rooted on
   \texttt{lChild}.
-\end{description}
+\end{itemize}
 #+end_export
 
 #+begin_src go <<Voting initialization (leaves)>>=
@@ -310,16 +323,17 @@ declaration of 5 variables:
 
 #+begin_export latex
 The voting itself consists of the following steps:
-\begin{enumerate}
-\item get the labels of leaves of a subtree;
-\item count the targets among these leaves;
+\begin{enumerate}[itemsep = -2pt]
+\item get labels of leaves of a subtree;
+\item count matches between the labels and names of the target
+  genomes;
 \item choose the winning clade.
 \end{enumerate}
-The voting stops when the number of votes from the losing clade is
-equal to the number of its leaves.  If \texttt{fita} runs in the
-verbose mode (\texttt{-verbose}), the summary on the intermediate
-results is printed out.
 
+The voting stops when the number of votes for the losing clade is
+equal to the number of its leaves.  If \texttt{fita} runs in verbose
+mode (\texttt{-verbose}), the summary on the intermediate results is
+printed out.
 #+end_export
 
 #+begin_src go <<The voting (leaves)>>=
@@ -341,8 +355,8 @@ results is printed out.
 #+end_src
 
 #+begin_export latex
-In the beginning of each round we reset the number of votes and the
-label slices.
+In the beginning of each round we set numbers of the votes to zero and
+reset slices of the labels.
 #+end_export
 
 #+begin_src go <<Reset the previous results (leaves)>>=
@@ -351,18 +365,19 @@ label slices.
 #+end_src
 
 #+begin_export latex
-We apply the custom function \texttt{getLeafLabels} to the children
-of the current root to get slices of the leaf labels. If a child is a
+We apply the function \texttt{getLeafLabels} to the children of the
+current root to get slices of the leaf labels. If a child is a
 terminal node, we simply get its label without calling the function.
 #+end_export
 
 #+begin_src go <<Get leaf labels>>=
+    // the right child
   if rChild.Child == nil {
 	  rLeafLabels = append(rLeafLabels, rChild.Label)
   } else {
 	  rLeafLabels = getLeafLabels(rChild.Child, rLeafLabels)
   }
-
+    // the left child
   if lChild.Child == nil {
 	  lLeafLabels = append(lLeafLabels, lChild.Label)
   } else {
@@ -397,12 +412,12 @@ We count votes of the right and left clades.
 #+end_src
 
 #+begin_export latex
-The function \texttt{countVotes} accepts a slice of tree items that
-can be either leaf labels (\texttt{string}) or branch lengths
-(\texttt{float64}) as the first argument. The second argument is a
-criterion to qualify the items as voters. It may be either a list of
-targets (\texttt{[]string}) or the branch length threshold
-(\texttt{float64}).
+The function \texttt{countVotes} accepts two arguments. The first one
+is a slice of tree items that can be either leaf labels
+(\texttt{string}) or branch lengths (\texttt{float64}). The second
+argument is a criterion to qualify the items as voters. It may be
+either a list of targets (\texttt{[]string}) or a branch length
+threshold (\texttt{float64}).
 #+end_export
 
 #+begin_src go <<Functions>>=
@@ -421,7 +436,8 @@ targets (\texttt{[]string}) or the branch length threshold
 #+end_src
 
 #+begin_export latex
-Votes are the number of the target leaves.
+The number of votes is equal to the number of matches between the leaf
+labels and the names of the target genomes.
 #+end_export
 
 #+begin_src go <<Target leaves vote>>=
@@ -450,7 +466,8 @@ of strings.
 #+end_src
 
 #+begin_export latex
-Votes are the number of branches shorter than the threshold.
+The number of votes is equal to the number of branches that are
+shorter than the threshold.
 #+end_export
 
 #+begin_src go <<Short branches vote>>=
@@ -463,7 +480,7 @@ Votes are the number of branches shorter than the threshold.
 #+end_src
 
 #+begin_export latex
-The initial value of \texttt{rVotes} and \texttt{lVotes} is zero.
+The initial value of both \texttt{rVotes} and \texttt{lVotes} is zero.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
@@ -505,12 +522,12 @@ We print the results of the current voting round.
 #+end_src
 
 #+begin_export latex
-When the iterative voting is over, we print the resulting tree (by
-default; if the \texttt{-c} flag is set, we skip printing the
-tree). We remove the first character which has to be comma and insert
-a parenthesis and a semicolon in the beginning and in the end of the
-string, respectively, to designate the root properly. If the
-\texttt{-verbose} flag is used, we print the summary.
+When the iterative voting is over, we print out the resulting tree by
+default. If the \texttt{-c} flag is used, we skip the printing. To
+format the output tree properly, we remove the first character (a
+comma) and append a parenthesis and a semicolon to the beginning and
+to the end of the string, respectively. If the \texttt{-verbose} flag
+is used, we print out the summary.
 #+end_export
 
 #+begin_src go <<Print the target clade (leaves)>>=
@@ -536,7 +553,7 @@ We inform the user that the voting is finished.
 
 #+begin_src go <<Print the voting results (leaves)>>=
   fmt.Printf(
-	  "final:\t\tone of the clades consists of targets\n")
+	  "final:\t\tone of the clades consists of the targets\n")
   fmt.Printf(
 	  "final:\t\treturn to the parent node (%s)\n" +
 	  "\nThe found target clade has %d of %d targets.\n",
@@ -545,11 +562,10 @@ We inform the user that the voting is finished.
 #+end_src
 
 #+begin_export latex
-If \texttt{fita} runs in the complete mode, we proceed with the
-automated long branch removal. This operation is also based on the
+If \texttt{fita} runs in the complete mode, we proceed with automated
+removal of long branches. This operation is also based on the
 iterative voting, but this time voters are branches which are not
-longer than the treshold that is to be calculated before the voting
-itself.
+longer than a threshold. The latter is calculated prior to the voting.
 #+end_export
 
 #+begin_src go <<Remove the long branches>>=
@@ -559,10 +575,10 @@ itself.
 #+end_src
 
 #+begin_export latex
-We initialize the voting. We extract lengths of all branches from the
-tree rooted on \texttt{cRoot}, i.e. the target clade found in the
-previous voting. Then we calculate the length treshold. We also reset
-\texttt{round}.
+We extract lengths of all branches from the tree rooted on
+\texttt{cRoot}. At this point, the \texttt{cRoot} is the LCA for the
+majority of targets. We use these lengths to calculate the length
+threshold. We also reset \texttt{round}.
 #+end_export
 
 #+begin_src go <<Voting initialization (branches)>>=
@@ -574,7 +590,7 @@ previous voting. Then we calculate the length treshold. We also reset
 
 #+begin_export latex
 The recursive function \texttt{getBranchLengths} traverses the input
-tree rooted on the node \texttt{n} and returns a slice of branch
+tree rooted on the node \texttt{n} and returns a slice of all branch
 lengths.
 #+end_export
 
@@ -591,9 +607,10 @@ lengths.
 #+end_src
 
 #+begin_export latex
-We expect the branches of the 'core' target clade to be significantly
-shorter compared to other branches. Branch length clustering will help
-us to discover the boundary between the short and longer branches.
+We expect the branches of the 'core target clade' to be noticeably
+shorter compared to misclassified branches
+(Figure~\ref{fig:cladeReduced}). To reveal the the boundary between
+the shorter and the longer branches, we cluster their lengths.
 #+end_export
 
 #+begin_src go <<Calculate the branch length threshold>>=
@@ -602,9 +619,9 @@ us to discover the boundary between the short and longer branches.
 #+end_src
 
 #+begin_export latex
-We prepare the input data to perform the clustering using DBSCAN
-(density-based algorithm for discovering clusters in large spatial
-databases with noise~\cite{est96:clu}).
+We use the DBSCAN (Density-Based Algorithm for Discovering Clusters in
+Large Spatial Databases with Noise~\cite{est96:clu}) to cluster all
+branch lengths.
 #+end_export
 
 #+begin_src go <<Branch length clustering>>=
@@ -613,26 +630,25 @@ databases with noise~\cite{est96:clu}).
 #+end_src
 
 #+begin_export latex
-The DBSCAN algorithm for data clustering is sensitive to the
-topological structure of the data. We want big to be clustered with
-big, and small with small, so we sort the input data before
-clustering. Since most DBSCAN implementations work with
-two-dimensional coordinates, we will arrange our input into a
-two-column table, where the first column is filled with zeroes, and
-the second column is for the branch lengths. In other words, we create
-an imaginary projection of branch lengths on the Y-axis.
+The DBSCAN is sensitive to the topological structure of the input
+data. We want big to be clustered with big, and small with small, so
+we sort the input data before the clustering. Since most DBSCAN
+implementations work with two-dimensional coordinates, we will arrange
+our input into a two-column table, where the first column is filled
+with zeroes, and the second column is filled with the branch
+lengths. In other words, we create an imaginary projection of branch
+lengths on the Y-axis.
 #+end_export
 
 #+begin_src go <<Prepare the data>>=
   sort.Float64s(allLengths)
-
   nVal := len(allLengths)
-
   data := make([][]float64, nVal)
+    // create an empty table
   for i := range data {
 	  data[i] = make([]float64, 2)
   }
-
+    // fill the table with values
   for i, v := range allLengths {
 	  data[i][0] = 0
 	  data[i][1] = v
@@ -648,10 +664,10 @@ We import \texttt{sort}.
 #+end_src
 
 #+begin_export latex
-The DBSCAN clustering is implemented in the \texttt{clusters}
-package~\cite{clusters}. The function \texttt{clusters.DBSCAN}
-requires four parameters:
-\begin{enumerate}
+We use the \texttt{clusters} package~\cite{clusters} to perform the
+DBSCAN. The function \linebreak\texttt{clusters.DBSCAN} requires four
+parameters:
+\begin{enumerate}[itemsep = -2pt]
   \item \textbf{minpts} which is minimal number of points in a
     cluster;
   \item $\epsilon$ (\textbf{eps}) which is neighborhood radius around
@@ -675,11 +691,9 @@ Let \textbf{eps} be the average increase in node length, i.e.
      nodes}}
 \]
 One worker should be enough to cluster less than a thousand numbers.
-As for the distance calculation method, we will use the Euclidean
-Distance method implemented as the in built
-\texttt{clusters.EuclideanDistance} function.
-
-We print \texttt{eps} if the \texttt{-c} flag is used.
+We will use the Euclidean Distance function
+(\texttt{clusters.EuclideanDistance}). We print \texttt{eps}
+if the \texttt{-c} flag is used.
 #+end_export
 
 #+begin_src go <<Define DBSCAN parameters>>=
@@ -723,11 +737,11 @@ attributed to which clusters), we use the \texttt{Guesses} method. The
 clusters are enumerated starting with \textbf{1} (for the biggest
 cluster). Sometimes \texttt{Guesses} returns cluster indices of
 \textbf{-1} intended for outlier points (not belonging to any
-cluster.
+cluster.\par
 
 \texttt{Sizes} and \texttt{Guesses} are part of the
 \texttt{HardCluster} interface, which is used in the \texttt{clusters}
-package to actually perform the analysis using a clusterer.
+package to actually perform the analysis using a clusterer.\par
 
 We print the clustering results if the \texttt{-verbose} flag is used.
 #+end_export
@@ -741,15 +755,13 @@ We print the clustering results if the \texttt{-verbose} flag is used.
 	  fmt.Printf(
 		  "The branches were set into %d clusters:\n\n",
 		  len(c.Sizes()))
-
-	  //print the table of cluster sizes
+	    // print the table of cluster sizes
 	  fmt.Printf("Cluster id\tCluster size\n")
 	  for i, n := range c.Sizes() {
 		  fmt.Printf("%d\t\t%d\n",
 			  i+1, n)
 	  }
-
-	  //print the table of cluster mappings
+	    // print the table of cluster mappings
 	  fmt.Printf("\nBranch length\tCluster id\n")
 	  for i, n := range c.Guesses() {
 		  if n == -1 {
@@ -767,13 +779,13 @@ We print the clustering results if the \texttt{-verbose} flag is used.
 
 #+begin_export latex
 To find the threshold branch length, we take the biggest value from
-the biggest cluster. We assume that the biggest cluster contains
-small branch lengths. Since the branch lengths are sorted in ascending
+the biggest cluster. We assume that the biggest cluster contains the
+smallest branch lengths. Since the lengths are sorted in the ascending
 order, we deduce that the first cluster begins at \texttt{data[0][1]}
 and ends at \texttt{data[n-1][1]}, where \texttt{n} is the size of the
 first cluster that is returned with the \texttt{Sizes} method. So,
 \texttt{data[n-1][1]} is the biggest value in the cluster. We return
-this value.
+this value.\par
 
 We print the threshold value if the \texttt{-verbose} flag is used.
 #+end_export
@@ -789,7 +801,8 @@ We print the threshold value if the \texttt{-verbose} flag is used.
 
 #+begin_export latex
 We use the iterative voting again, but this time with the different
-rules.  Now voters are branches which have length below the threshold.
+rules.  Now voters are branches, which lengths are below the
+threshold.
 #+end_export
 
 #+begin_src go <<The voting (branches)>>=
@@ -812,7 +825,7 @@ rules.  Now voters are branches which have length below the threshold.
 #+end_src
 
 #+begin_export latex
-We declare thresholdFound, tl, tr.
+We declare \texttt{thresholdFound}, \texttt{tl}, \texttt{tr}.
 #+end_export
 
 #+begin_src go <<Auxillary variables>>=
@@ -820,8 +833,8 @@ We declare thresholdFound, tl, tr.
 #+end_src
 
 #+begin_export latex
-In the beginning of each round we reset the number of votes and the
-branch length slices.
+In the beginning of each round, set the number of votes to zero and
+reset the branch length slices.
 #+end_export
 
 #+begin_src go <<Reset the previous results (branches)>>=
@@ -836,17 +849,18 @@ simply get the length of its branch without calling the function.
 #+end_export
 
 #+begin_src go <<Get branch lengths>>=
+    // the right child
   if rChild.Child == nil {
 	  rbLengths = append(rbLengths, rChild.Length)
-  } else {
+    } else {
 	  rbLengths = getBranchLengths(rChild.Child, rbLengths)
-  }
-
+    }
+    // the left child
   if lChild.Child == nil {
 	  lbLengths = append(lbLengths, lChild.Length)
-  } else {
+    } else {
 	  lbLengths = getBranchLengths(lChild.Child, lbLengths)
-  }
+    }
 #+end_src
 
 #+begin_export latex
@@ -924,11 +938,8 @@ We print the results of the current voting round.
 #+end_src
 
 #+begin_export latex
-When the iterative voting is over, we print the resulting tree. We
-remove the first character which has to be comma and insert a
-parenthesis and a semicolon in the beginning and in the end of the
-string, respectively. If the \texttt{-c} flag is used, we print the
-summary of the run.
+When the iterative voting is over, we print the resulting tree. If the
+\texttt{-c} flag is used, we print the summary of the run.
 #+end_export
 
 #+begin_src go <<Print the target clade (branches)>>=
