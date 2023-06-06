@@ -778,25 +778,28 @@ We print the clustering results if the \texttt{-verbose} flag is used.
 #+end_src
 
 #+begin_export latex
-To find the threshold branch length, we take the biggest value from
-the biggest cluster. We assume that the biggest cluster contains the
-smallest branch lengths. Since the lengths are sorted in the ascending
-order, we deduce that the first cluster begins at \texttt{data[0][1]}
-and ends at \texttt{data[n-1][1]}, where \texttt{n} is the size of the
-first cluster that is returned with the \texttt{Sizes} method. So,
-\texttt{data[n-1][1]} is the biggest value in the cluster. We return
-this value.\par
+To find the threshold branch length, we take the \textbf{$95^{th}$
+  percentile} from the biggest cluster.
 
 We print the threshold value if the \texttt{-verbose} flag is used.
 #+end_export
 
 #+begin_src go <<Retrieve the threshold>>=
-  thresholdLen := data[c.Sizes()[0] - 1][1]
+  percentile := int(math.Floor(float64(c.Sizes()[0])*0.95))
+  thresholdLen := data[percentile][1]
 
   if *optVerbose {
 	  fmt.Printf(
 		  "\nThreshold branch length = %2f\n", thresholdLen)
   }
+#+end_src
+
+#+begin_export latex
+We import \texttt{math}.
+#+end_export
+
+#+begin_src go <<Imports>>=
+  "math"
 #+end_src
 
 #+begin_export latex
